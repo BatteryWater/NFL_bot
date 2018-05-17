@@ -18,3 +18,6 @@
   - [ ] People not on the DB
   - [ ] Spelling errors
   - [ ] Checking the closest name
+
+
+[Formatting] (https://guides.github.com/features/mastering-markdown/)
