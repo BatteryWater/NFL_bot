@@ -20,4 +20,4 @@
   - [ ] Checking the closest name
 
 
-[Formatting] (https://guides.github.com/features/mastering-markdown/)
+[Formatting](https://guides.github.com/features/mastering-markdown/)
