@@ -12,6 +12,8 @@
 - Replies
   - [x] Replies with the gathered info
   - [x] Replace Apostrophes. Added replace("'", "%91")
+  - [ ] Replace dash
+  - [x] Table formatted
   - [ ] Nicely formatted
 - Handle Search Errors
   - [ ] People with the same name
