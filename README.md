@@ -10,5 +10,3 @@
 - Replies
   - [x] Replies with the gathered info
   - [x] Replace Apostrophes. Added replace("'", "%91")
-  - [ ]
-  - [] 
