@@ -35,12 +35,14 @@ def bot_login():
     return r
 
 class Player:
-    def __init__(self, soup):
-        self.GetInfo(soup)
+    def __init__(self, soup, url):
+        self.GetInfo(soup, url)
 
-    def GetInfo(self, soup):
+    def GetInfo(self, soup, url):
         """Scrape and parse relevant player stats from the soup"""
         self.Name = soup.find('h1', {'itemprop':'name'}).text
+        self.PlayerURL = url
+        self.NameString = "[{}]({})".format(self.Name, self.PlayerURL)
         #height = soup.find('span', {'itemprop':'height'}).text
         self.Height = DefaultCheck(soup.find('span', {'itemprop':'height'}))
         #self.Height = soup.find('span', {'itemprop':'height'}).text
@@ -61,11 +63,10 @@ class Player:
 
 
     def __str__(self):
-        teamstring = "[{}]({})".format(self.Team, self.TeamURL)
         s= """**Name:** {}\n
 **Height:** {}\n
 **Weight:** {}\n
-**Team:** {}\n\n **Date of Birth:** {}\n{}\n\n\n\n""".format(self.Name, self.Height, self.Weight, self.TeamString, self.DOB, self.Stats)
+**Team:** {}\n\n **Date of Birth:** {}\n{}\n\n\n\n""".format(self.NameString, self.Height, self.Weight, self.TeamString, self.DOB, self.Stats)
         return s
 
 
@@ -139,13 +140,14 @@ def response_bs_pfr(player, position):
     """BeautifulSoup PFR scraped response generator"""
     print(player)
     searchUrl = requests.get("https://www.pro-football-reference.com/search/search.fcgi?hint=&search={}".format(player.replace(" ", "+")))
+    url = searchUrl.url
     soup = BeautifulSoup(searchUrl.text, "lxml")
     responsePlayers = []
     players = soup.find('div', id="players")
     if players is None:
             info = soup.find('div', id="info")
-            responsePlayers.append(str(Player(info)))
-            #print(p)
+            responsePlayers.append(str(Player(info, url)))
+
     else:
             playerUrlList = []
             if position is None or position is "":#filter by position if possible
@@ -160,28 +162,15 @@ def response_bs_pfr(player, position):
                                                 url = match.find('a')
                                                 print(url)
                                                 playerUrlList.append(url['href'])
-                                                #print(url.find('href'))
-                                                #print(url['href'])
-                                                #print (match.text)
-                                                #responsePlayers.append(match)
 
             if len(playerUrlList) != 0:
                 for playerUrl in playerUrlList[0:3]:
                     player = BeautifulSoup(requests.get("https://www.pro-football-reference.com/{}".format(playerUrl)).text, "lxml")
-                    #print(Player(player))
-                    #info = player.find('div', id="info")
-                    responsePlayers.append(str(Player(player)))
+                    responsePlayers.append(str(Player(player, "https://www.pro-football-reference.com/{}".format(playerUrl))))
             else:
                 print("No matches")
-                #print(info)
 
-            #at least one player
-            #comment each player
-
-    return ''.join(responsePlayers)
-    #print(searchUrl.url)
-    #print(soup.url)
-    #print(searchUrl.text)
+    return(''.join(responsePlayers))
 
 def response(player, player_info):
     if player is not None:
@@ -238,37 +227,26 @@ def run_bot(r, comments_replied_to):
     try:
         print("Obtaining 250 comments...")
         for comment in r.subreddit('test').comments(limit=250):
+            match = re.findall("\[\[([\w+'\-\s]+)(?:\]\]|(?:\()([\w+'-]+)(?:\))\]\])", comment.body)
 
-            #match = re.search(r"\[\[(.*?)\]\]", comment.body)
-            match = re.findall("\[\[([\w'\-\s]+)(\([\w'\-\s]+\))?\]\]", comment.body)
-           # print(match)
-            #if match is not None:
-               #print(len(match))
             if match is not None and (len(match) > 0) and comment.id not in comments_replied_to and comment.author != config.username:
-                if len(match) > 1:
-                    comment.reply(response_bs_pfr(match[0][0], match[1]))
+                if len(match[0]) > 1:
+                    comment.reply(response_bs_pfr(match[0][0], match[0][1]))
                 else:
                     comment.reply(response_bs_pfr(match[0][0], None))
 
-
-
-            #if(match) and comment.id not in comments_replied_to and comment.author != config.username:
-
-                #comment_reply = comment_message("Player Stats: \n\n", response(match.group(1).replace("'", "%91"), player_info))
-                #comment.reply(comment_reply)
                 comments_replied_to.add(comment.id)
-
-                with open ("comments_replied_to.txt", "a") as f:
-                    f.write(comment.id + "\n")
 
         print("Sleeping for 10 seconds...")
         time.sleep(10)
+
     except praw.exceptions.APIException as e:
         exc = e._raw
         print("Something bad happened! APIException", exc.status_code)
         if exc.status_code == 503:
             print("Let's wait til reddit comes back! Sleeping 60 seconds.")
         time.sleep(60)
+
     except Exception as e:
         print("Something bad happened!", e)
         traceback.print_exc()
@@ -280,10 +258,7 @@ def get_saved_comments():
             comments_replied_to = set()
         else:
             comments_replied_to = set(open('comments_replied_to.txt').read().split())
-            #with open ("comments_replied_to.txt", "r") as f:
-                #comments_replied_to = f.read()
-                #comments_replied_to = comments_replied_to.split("\n")
-                #comments_replied_to = filter(None, comments_replied_to)
+
         return comments_replied_to
 
     except PermissionError as e:
@@ -303,7 +278,6 @@ def start_up():
         except KeyboardInterrupt:
             print("Shutting down.")
             break
-    #print(comments_replied_to)
 
 
 start_up()
