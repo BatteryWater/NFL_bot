@@ -14,7 +14,7 @@ player_info = OrderedDict()
 
 def DefaultCheck(value):
     if value is None:
-        return "Unknown"
+        return "-"
     return value.text
 
 
@@ -39,6 +39,7 @@ class Player:
         self.GetInfo(soup)
 
     def GetInfo(self, soup):
+        """Scrape and parse relevant player stats from the soup"""
         self.Name = soup.find('h1', {'itemprop':'name'}).text
         #height = soup.find('span', {'itemprop':'height'}).text
         self.Height = DefaultCheck(soup.find('span', {'itemprop':'height'}))
@@ -48,27 +49,23 @@ class Player:
         team = soup.find('span', {'itemprop' : 'affiliation'})
         if team is not None:
             self.Team = team.find('a').text
-            self.TeamURL = team.find('a')['href']
+            self.TeamURL = "https://www.pro-football-reference.com" + team.find('a')['href']
             self.TeamString = "[{}]({})".format(self.Team, self.TeamURL)
         else:
             self.Team = None
             self.TeamURL = None
             self.TeamString = "Free Agent"
         self.DOB = DefaultCheck(soup.find('span', {'itemprop':'birthDate'}))
-        #self.College = DefaultCheck(soup.find('span', {'itemprop':'fig'}))
+        #self.College = DefaultCheck(soup.find('span', {'itemprop':'fig'})) #TODO:
         self.Stats = Stats(soup.find('div', {'class':'stats_pullout'}))
-        #print(self.Height)
-        #orderedStats = OrderedDict()
-        #orderedStat['Name'] = 'sam'
-        #return orderedStat
+
 
     def __str__(self):
         teamstring = "[{}]({})".format(self.Team, self.TeamURL)
-        s= """Name: {}
-Height: {}
-Weight: {}
-Team: {}
-Date of Birth: {}\n{}\n""".format(self.Name, self.Height, self.Weight, self.TeamString, self.DOB, self.Stats)
+        s= """**Name:** {}\n
+**Height:** {}\n
+**Weight:** {}\n
+**Team:** {}\n\n **Date of Birth:** {}\n{}\n\n\n\n""".format(self.Name, self.Height, self.Weight, self.TeamString, self.DOB, self.Stats)
         return s
 
 
@@ -80,6 +77,7 @@ def StatsTest(url):
 
 class Stats:
     def __init__(self, statsDiv):
+        """Encapsulation of stats table data"""
         self.statDict = {}
         if statsDiv is None:
             return
@@ -93,16 +91,20 @@ class Stats:
             #print(p)
                 self.statDict[key] = [p[0].text, p[1].text]
             else:
-                self.statDict[key] = [p[0].text, "Unknown"]
+                self.statDict[key] = [p[0].text]
 
-    def __str__(self): #string method, converts it to reddit's table format
+    def __str__(self):
+        """Formats to reddit's table markup"""
         if len(self.statDict) == 0:
             return ""
         colCount = len(self.statDict)
         retStringList= []
+        maxPCount = 0
         for key, val in self.statDict.items():
             retStringList.append(key)
             retStringList.append('|')
+            maxPCount = max(maxPCount, len(val))
+            #print(len(val))
         del retStringList[-1]
 
         retStringList.append("\n")
@@ -116,10 +118,12 @@ class Stats:
             retStringList.append('|')
         del retStringList[-1]
         retStringList.append("\n")
-        for key, val in self.statDict.items():
-            retStringList.append(val[1])
-            retStringList.append('|')
-        del retStringList[-1]
+        #print(maxPCount)
+        if(maxPCount > 1):
+            for key, val in self.statDict.items():
+                retStringList.append(val[1])
+                retStringList.append('|')
+            del retStringList[-1]
 
         return ''.join(retStringList)
 
@@ -132,6 +136,7 @@ def IsPosMatch(position, toCheck):
     return False
 
 def response_bs_pfr(player, position):
+    """BeautifulSoup PFR scraped response generator"""
     print(player)
     searchUrl = requests.get("https://www.pro-football-reference.com/search/search.fcgi?hint=&search={}".format(player.replace(" ", "+")))
     soup = BeautifulSoup(searchUrl.text, "lxml")
@@ -302,5 +307,3 @@ def start_up():
 
 
 start_up()
-#comments_replied_to = get_saved_comments()
-#print(comments_replied_to)
