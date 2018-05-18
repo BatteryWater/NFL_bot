@@ -19,11 +19,11 @@ def DefaultCheck(value):
 
 
 def bot_login():
-    print("Loggin in...")
-    print(config.username)
-    print(config.client_id)
-    print(config.client_secret)
-    print(config.password)
+    print("Logging in...")
+    #print(config.username)
+    #print(config.client_id)
+    #print(config.client_secret)
+    #print(config.password)
 
     r = praw.Reddit(username = config.username,
             password = config.password,
@@ -160,7 +160,7 @@ def response_bs_pfr(player, position):
                                             #print(position)
                                             if re.search(str(position.upper()), match.text) is not None:
                                                 url = match.find('a')
-                                                print(url)
+                                                #print(url)
                                                 playerUrlList.append(url['href'])
 
             if len(playerUrlList) != 0:
@@ -236,6 +236,8 @@ def run_bot(r, comments_replied_to):
                     comment.reply(response_bs_pfr(match[0][0], None))
 
                 comments_replied_to.add(comment.id)
+                with open ("comments_replied_to.txt", "a") as f:
+                    f.write(comment.id + "\n")
 
         print("Sleeping for 10 seconds...")
         time.sleep(10)
