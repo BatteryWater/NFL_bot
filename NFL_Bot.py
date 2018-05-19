@@ -12,18 +12,14 @@ import traceback
 from bs4 import BeautifulSoup
 player_info = OrderedDict()
 
-def DefaultCheck(value):
+def defaultCheck(value):
     if value is None:
         return "-"
     return value.text
 
 
-def bot_login():
+def botLogin():
     print("Logging in...")
-    #print(config.username)
-    #print(config.client_id)
-    #print(config.client_secret)
-    #print(config.password)
 
     r = praw.Reddit(username = config.username,
             password = config.password,
@@ -31,54 +27,55 @@ def bot_login():
             client_secret = config.client_secret,
             user_agent = "NFL Player Stats Bot v0.1")
     print("Logged in!")
-
     return r
 
 class Player:
-    def __init__(self, soup, url):
-        self.GetInfo(soup, url)
+    """Encapsulation for Player stats"""
+    def __init__(self, url):
+        self.GetInfo(url)
 
-    def GetInfo(self, soup, url):
+    def GetInfo(self, url):
         """Scrape and parse relevant player stats from the soup"""
-        self.Name = soup.find('h1', {'itemprop':'name'}).text
+        print(url)
+        soup = BeautifulSoup(requests.get(url).text, "lxml")
+        self.Name = soup.find('h1', {'itemprop':'name'}).text.strip()
         self.PlayerURL = url
         self.NameString = "[{}]({})".format(self.Name, self.PlayerURL)
-        #height = soup.find('span', {'itemprop':'height'}).text
-        self.Height = DefaultCheck(soup.find('span', {'itemprop':'height'}))
-        #self.Height = soup.find('span', {'itemprop':'height'}).text
-        self.Weight = DefaultCheck(soup.find('span', {'itemprop':'weight'}))
-        #weight = soup.find(
+        self.Height = defaultCheck(soup.find('span', {'itemprop':'height'}))\
+                        .strip()
+        self.Weight = defaultCheck(soup.find('span', {'itemprop':'weight'}))\
+                        .strip()
         team = soup.find('span', {'itemprop' : 'affiliation'})
         if team is not None:
-            self.Team = team.find('a').text
-            self.TeamURL = "https://www.pro-football-reference.com" + team.find('a')['href']
+            self.Team = team.find('a').text.strip()
+            self.TeamURL = "https://www.pro-football-reference.com" + \
+                            team.find('a')['href'].strip()
             self.TeamString = "[{}]({})".format(self.Team, self.TeamURL)
         else:
             self.Team = None
             self.TeamURL = None
             self.TeamString = "Free Agent"
-        self.DOB = DefaultCheck(soup.find('span', {'itemprop':'birthDate'}))
-        #self.College = DefaultCheck(soup.find('span', {'itemprop':'fig'})) #TODO:
+        self.DOB = defaultCheck(soup.find('span', {'itemprop':'birthDate'}))\
+                        .strip()
+#TODO:     #self.College = DefaultCheck(soup.find('span', {'itemprop':'fig'}))
         self.Stats = Stats(soup.find('div', {'class':'stats_pullout'}))
 
 
     def __str__(self):
-        s= """**Name:** {}\n
-**Height:** {}\n
-**Weight:** {}\n
-**Team:** {}\n\n **Date of Birth:** {}\n{}\n\n\n\n""".format(self.NameString, self.Height, self.Weight, self.TeamString, self.DOB, self.Stats)
-        return s
-
-
-
-def StatsTest(url):
-    soup = BeautifulSoup(requests.get(url).text, "lxml")
-    print(Stats(soup.find('div', {'class':'stats_pullout'})))
+        s= "**Name:** {}\n\n**Height:** {}\n\n**Weight:** {}\n\n"\
+                .format(self.NameString,
+                        self.Height,
+                        self.Weight)
+        sTwo = "**Team:** {}\n\n**Date of Birth:** {}\n\n{}\n\n\n\n"\
+                .format(self.TeamString,
+                        self.DOB,
+                        self.Stats)
+        return s + sTwo
 
 
 class Stats:
+    """Encapsulation of stats table data"""
     def __init__(self, statsDiv):
-        """Encapsulation of stats table data"""
         self.statDict = {}
         if statsDiv is None:
             return
@@ -89,7 +86,6 @@ class Stats:
             key = col.find_all('h4')[0].text
             p = col.find_all('p')
             if(len(p) > 1):
-            #print(p)
                 self.statDict[key] = [p[0].text, p[1].text]
             else:
                 self.statDict[key] = [p[0].text]
@@ -105,139 +101,78 @@ class Stats:
             retStringList.append(key)
             retStringList.append('|')
             maxPCount = max(maxPCount, len(val))
-            #print(len(val))
-        del retStringList[-1]
 
+        del retStringList[-1]
         retStringList.append("\n")
+
         for i in range(0, colCount):
             retStringList.append(":--")
             retStringList.append("|")
+
         del retStringList[-1]
         retStringList.append('\n')
+
         for key, val in self.statDict.items():
             retStringList.append(val[0])
             retStringList.append('|')
+
         del retStringList[-1]
         retStringList.append("\n")
-        #print(maxPCount)
+
         if(maxPCount > 1):
             for key, val in self.statDict.items():
                 retStringList.append(val[1])
                 retStringList.append('|')
             del retStringList[-1]
+        retStringList.append("\n\n\n\n")
 
         return ''.join(retStringList)
 
 
-
-
-def IsPosMatch(position, toCheck):
-    if position.ascii_lowercase == toCheck.ascii_lowercase:
-        return True
-    return False
-
-def response_bs_pfr(player, position):
-    """BeautifulSoup PFR scraped response generator"""
-    print(player)
-    searchUrl = requests.get("https://www.pro-football-reference.com/search/search.fcgi?hint=&search={}".format(player.replace(" ", "+")))
+def getPlayerURLs(playerName, position):
+    """Searches for playerName, returns a list of the first exact match or
+    first three matches"""
+    urlBaseString = "https://www.pro-football-reference.com" +\
+    "/search/search.fcgi?hint=&search="
+    siteBaseString = "https://www.pro-football-reference.com"
+    searchUrl = requests.get(urlBaseString + playerName.replace(" ", "+"))
     url = searchUrl.url
     soup = BeautifulSoup(searchUrl.text, "lxml")
-    responsePlayers = []
-    players = soup.find('div', id="players")
-    if players is None:
-            info = soup.find('div', id="info")
-            responsePlayers.append(str(Player(info, url)))
+    playerURLsList = []
+    playersDiv = soup.find('div', id="players")
 
+    if playersDiv is None:
+        playerURLsList.append(url)
+        return playerURLsList
+
+    if position is None or position is "":
+        playerURLS = playersDiv.find_all('a')
+        for player in playerURLS:
+            playerURLsList.append(siteBaseString + player['href'])
+            if(len(playerURLsList) == 3):
+                break
     else:
-            playerUrlList = []
-            if position is None or position is "":#filter by position if possible
-                playerUrls = players.find_all('a')
-                for player in playerUrls:
-                    playerUrlList.append(player['href'])
-            else:
-                    matchedPos = players.find_all("div", {"class":"search-item-name"})
-                    for match in matchedPos:
-                                            #print(position)
-                                            if re.search(str(position.upper()), match.text) is not None:
-                                                url = match.find('a')
-                                                #print(url)
-                                                playerUrlList.append(url['href'])
+        matchedPos = playersDiv.find_all("div", {"class":"search-item-name"})
+        for match in matchedPos:
+            if re.search(str(position.upper()), match.text) is not None:
+                url = match.find('a')
+                playerURLsList.append(siteBaseString + url['href'])
+                if(len(playerURLsList) == 3):
+                    break
+    return playerURLsList
 
-            if len(playerUrlList) != 0:
-                for playerUrl in playerUrlList[0:3]:
-                    player = BeautifulSoup(requests.get("https://www.pro-football-reference.com/{}".format(playerUrl)).text, "lxml")
-                    responsePlayers.append(str(Player(player, "https://www.pro-football-reference.com/{}".format(playerUrl))))
-            else:
-                print("No matches")
 
-    return(''.join(responsePlayers))
-
-def response(player, player_info):
-    if player is not None:
-        search = requests.get("http://www.nfl.com/players/search?category=name&filter={}&playerType=current".format(player.replace(" ", "+")))
-
-        search_tree = html.fromstring(search.content)
-
-        if search_tree.xpath('//div[@id="searchResults"]//@href'):
-            search_result = search_tree.xpath('//div[@id="searchResults"]//@href')[0]
-        else:
-            search_result = None
-
-        if search_result is not None:
-
-            page = requests.get("http://www.nfl.com" + str(search_tree.xpath('//div[@id="searchResults"]//@href')[0]))
-            tree = html.fromstring(page.content)
-            bio = tree.xpath('//div[@class="player-info"]//p//text()')
-
-            player_info["Name"] = str(tree.xpath('//div[@class="player-info"]//span[@class="player-name"]/text()')[0].encode("ascii", errors="ignore").decode()).strip()
-            print("player name: " + player_info["Name"])
-            player_info["Number"] = str(tree.xpath('//div[@class="player-info"]//span[@class="player-number"]/text()')[0].encode("ascii", errors="ignore").decode()).strip()
-
-            player_info["Height"] = str(bio[bio.index("Height") + 1].encode("ascii", errors="ignore").decode()).split(": ",1)[1].strip().replace("-", "ft ").strip()
-
-            player_info["Weight"] = str(bio[bio.index("Weight") + 1].encode("ascii", errors="ignore").decode()).split(": ",1)[1].strip()
-
-            player_info["Age"] = str(bio[bio.index("Age") + 1].encode("ascii", errors="ignore").decode()).split(": ",1)[1].strip()
-
-            player_info["D.O.B"] = str(bio[bio.index("Born") + 1].encode("ascii", errors="ignore").decode()).split(": ",1)[1].strip()
-
-            player_info["Seasons Played"] = str(bio[bio.index("Experience") + 1].encode("ascii", errors="ignore").decode()).split(": ",1)[1].strip()
-
-            player_info["College"] = str(bio[bio.index("College") + 1].encode("ascii", errors="ignore").decode()).split(": ",1)[1].strip()
-
-            player_info["High School"] = str(bio[bio.index("High School") + 1].encode("ascii", errors="ignore").decode()).split(": ",1)[1].strip()
-
-            player_info["Current Team"] = "[ {} ]( {} )".format(str(tree.xpath('//div[@class="player-info"]//p[@class="player-team-links"]//a/text()')[0]).strip(), str(tree.xpath('//div[@class="player-info"]//p[@class="player-team-links"]//@href')[1]).replace(".com/", ".com"))
-
-        # player_info["seasons_played_for_current_team"] = ""
-        # player_info["career_total_stats"] = ""
-        # player_info["games_played"] = ""
-        # player_info["game_victories"] = ""
-        # player_info[""] = ""
-
-        return player_info
-
-def comment_message(response_message, player_info):
-    for k,v in player_info.iteritems():
-        response_message = response_message + ("> {}: {}\n\n".format(str(k), str(v)))
-
-    return response_message
-
-def run_bot(r, comments_replied_to):
+def runBotLoop(r, comments_replied_to):
     try:
         print("Obtaining 250 comments...")
         for comment in r.subreddit('test').comments(limit=250):
-            match = re.findall("\[\[([\w+'\-\s]+)(?:\]\]|(?:\()([\w+'-]+)(?:\))\]\])", comment.body)
-
-            if match is not None and (len(match) > 0) and comment.id not in comments_replied_to and comment.author != config.username:
-                if len(match[0]) > 1:
-                    comment.reply(response_bs_pfr(match[0][0], match[0][1]))
-                else:
-                    comment.reply(response_bs_pfr(match[0][0], None))
-
-                comments_replied_to.add(comment.id)
-                with open ("comments_replied_to.txt", "a") as f:
-                    f.write(comment.id + "\n")
+            if isValidComment(comment, comments_replied_to):
+                replies = processComment(comment)
+                if replies is not None and len(replies) > 0:
+                    comment.reply(''.join(replies))
+                    comments_replied_to.add(comment.id)
+                    with open("comments_replied_to.txt", "a") as f:
+                        f.write(comment.id + "\n")
 
         print("Sleeping for 10 seconds...")
         time.sleep(10)
@@ -253,33 +188,65 @@ def run_bot(r, comments_replied_to):
         print("Something bad happened!", e)
         traceback.print_exc()
 
-def get_saved_comments():
-    #comments_replied_to = set()
+
+def isValidComment(comment, comments_replied_to):
+    return (comment.id not in comments_replied_to) and \
+     comment.author is not config.username
+
+
+def processComment(comment):
+    """Processes a comment. Returns a string representing a comment reply, or
+    None in the case that a comment doesn't need a reply"""
+    replies = []
+    matches = getMatches(comment)
+    for match in matches:
+        replies.append(response_bs_pfr(match[0], match[1]))
+    return replies
+
+
+def getMatches(comment):
+    """returns a list of matching groups"""
+    pattern = "\[\[([\w+'\-\s]+)(?:\]\]|(?:\()([\w+'-]+)(?:\))\]\])"
+    match = re.findall(pattern, comment.body)
+    responseComments = []
+    if(match is not None and len(match) > 0):
+        for groupMatch in match:
+            if len(groupMatch[0]) > 1:
+                responseComments.append((groupMatch[0].strip(), groupMatch[1]))
+            else:
+                reponseComments.append((groupMatch[0].strip(), None))
+    return responseComments
+
+
+def getSavedComments():
     try:
         if not os.path.isfile("comments_replied_to.txt"):
             comments_replied_to = set()
         else:
-            comments_replied_to = set(open('comments_replied_to.txt').read().split())
+            comments_replied_to = \
+                set(open('comments_replied_to.txt').read().split())
 
         return comments_replied_to
 
     except PermissionError as e:
-        print("Permission Error! Ensure filepath is set to a directory in which you have create/edit permissions")
+        print("Permission Error! Ensure filepath is set to a directory " + \
+            "in which you have create/edit permissions")
 
-def start_up():
+
+def startUp():
     try:
-        r = bot_login()
+        r = botLogin()
     except prawcore.exceptions.OAuthException:
         print("OAUTH Exception! Check config info")
         return
-    comments_replied_to = get_saved_comments()
+    comments_replied_to = getSavedComments()
     print(comments_replied_to)
     while True:
         try:
-            run_bot(r, comments_replied_to)
+            runBotLoop(r, comments_replied_to)
         except KeyboardInterrupt:
             print("Shutting down.")
             break
 
-
-start_up()
+if __name__ == '__main__':
+    startUp()
